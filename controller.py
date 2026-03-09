@@ -1,1 +1,1 @@
-# Initializing Phantom Illusions Game Engine
+# Starting a new geometry project
