@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Illusion IDE</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <img src="./assets/logo.png" alt="Illusionhost logo" class="logo" />
+          <span class="brand-text">Illusion<span class="host">host</span></span>
+        </div>
+
+        <div class="top-actions">
+          <select id="modeSelect" class="ui-control">
+            <option value="ask">Ask</option>
+            <option value="code">Code</option>
+          </select>
+          <button id="themeToggle" class="ui-btn">Toggle Theme</button>
+        </div>
+      </header>
+
+      <main class="layout">
+        <aside class="panel left">
+          <h3>Files</h3>
+          <ul class="file-list">
+            <li>controller.py</li>
+            <li>index.html</li>
+            <li>styles.css</li>
+          </ul>
+        </aside>
+
+        <section class="panel center">
+          <h3>Editor</h3>
+          <textarea id="editor" class="editor" spellcheck="false"># Start editing...</textarea>
+        </section>
+
+        <aside class="panel right">
+          <h3>AI</h3>
+          <textarea id="prompt" class="prompt" placeholder="Ask or instruct AI..."></textarea>
+
+          <div class="btn-row">
+            <button id="btnCheckpoint" class="ui-btn">Create Checkpoint</button>
+            <button id="btnRun" class="ui-btn accent">Run AI</button>
+            <button id="btnRollback" class="ui-btn danger">Rollback</button>
+          </div>
+
+          <div class="meta">
+            <label>Checkpoint ID</label>
+            <input id="checkpointId" class="ui-control" placeholder="Paste checkpoint id" />
+          </div>
+
+          <pre id="output" class="output"></pre>
+        </aside>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
