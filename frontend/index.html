@@ -3,96 +3,92 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Illusion IDE</title>
+    <title>Illusionhost Agent IDE</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div class="app">
+    <div class="app-shell">
       <header class="topbar">
-        <div class="brand">
+        <div class="left-head">
           <img src="./assets/logo.png" alt="Illusionhost logo" class="logo" />
           <div>
-            <span class="brand-text">Illusion<span class="host">host</span></span>
-            <p class="sub-brand">Agentic IDE</p>
+            <p class="brand">Illusion<span>host</span></p>
+            <p class="sub">AI Workspace</p>
           </div>
+          <span id="statusPill" class="pill idle">Idle</span>
         </div>
 
-        <div class="top-actions">
-          <select id="modeSelect" class="ui-control compact">
+        <div class="right-head">
+          <select id="modeSelect" class="control compact">
             <option value="ask">Ask</option>
             <option value="code">Code</option>
           </select>
-          <button id="themeToggle" class="ui-btn compact">Toggle Theme</button>
+          <button id="themeToggle" class="btn compact ghost">Theme</button>
+          <button id="btnRun" class="btn compact accent">Run Agent</button>
         </div>
       </header>
 
-      <main class="layout">
-        <aside class="panel left">
-          <h3>Workspace</h3>
+      <main class="workspace">
+        <aside class="panel left-panel">
+          <section class="card">
+            <h3>Session</h3>
+            <div class="kv">
+              <span>User</span>
+              <strong id="sessionUser">Not detected</strong>
+            </div>
+            <div class="kv">
+              <span>Project</span>
+              <strong id="projectLabel">No project context</strong>
+            </div>
+            <div class="kv">
+              <span>Repo</span>
+              <strong id="repoLabel">No repo context</strong>
+            </div>
+            <div class="kv">
+              <span>Branch</span>
+              <strong id="branchLabel">No branch context</strong>
+            </div>
+            <p id="authHint" class="hint">Waiting for authenticated session...</p>
+          </section>
 
-          <div class="meta-group">
-            <label for="projectId">Project ID</label>
-            <input id="projectId" class="ui-control" placeholder="project uuid" />
-          </div>
-
-          <div class="meta-group">
-            <label for="ownerInput">Owner</label>
-            <input id="ownerInput" class="ui-control" placeholder="org or username" />
-          </div>
-
-          <div class="meta-group">
-            <label for="repoInput">Repo</label>
-            <input id="repoInput" class="ui-control" placeholder="repository" />
-          </div>
-
-          <div class="meta-group">
-            <label for="branchInput">Branch</label>
-            <input id="branchInput" class="ui-control" placeholder="main" />
-          </div>
-
-          <div class="meta-group">
-            <label for="filePathInput">File Path</label>
-            <input id="filePathInput" class="ui-control" placeholder="controller.py" />
-          </div>
-
-          <div class="meta-group">
-            <label for="tokenInput">Supabase Access Token</label>
-            <input id="tokenInput" type="password" class="ui-control" placeholder="paste token" />
-          </div>
-
-          <button id="saveConfig" class="ui-btn">Save Configuration</button>
+          <section class="card">
+            <h3>Checkpoint Control</h3>
+            <label for="checkpointId">Checkpoint ID</label>
+            <input id="checkpointId" class="control" placeholder="Checkpoint id" />
+            <div class="stack">
+              <button id="btnCheckpoint" class="btn">Create Checkpoint</button>
+              <button id="btnRollback" class="btn danger">Rollback</button>
+            </div>
+          </section>
         </aside>
 
-        <section class="panel center">
+        <section class="panel center-panel">
           <div class="panel-head">
-            <h3>AI Agent Console</h3>
-            <span id="agentStatus" class="status-badge idle">Idle</span>
+            <h3>Agent Thread</h3>
+            <span id="modeBadge" class="badge">ask</span>
           </div>
 
-          <div id="timeline" class="timeline"></div>
+          <div id="thread" class="thread"></div>
 
           <div class="composer">
-            <label for="prompt">Prompt</label>
-            <textarea id="prompt" class="prompt" placeholder="Describe the task for the AI Agent..."></textarea>
-            <div class="btn-row horizontal">
-              <button id="btnRun" class="ui-btn accent">Run AI</button>
-              <button id="btnCheckpoint" class="ui-btn">Create Checkpoint</button>
-              <button id="btnRollback" class="ui-btn danger">Rollback</button>
-            </div>
+            <textarea id="prompt" class="prompt" placeholder="Ask the agent to implement, refactor, or explain..."></textarea>
           </div>
         </section>
 
-        <aside class="panel right">
-          <h3>Code Context</h3>
-          <textarea id="editor" class="editor" spellcheck="false"># Start editing...</textarea>
+        <aside class="panel right-panel">
+          <section class="card grow">
+            <div class="panel-head">
+              <h3>Editor</h3>
+              <span class="hint">Monaco-ready</span>
+            </div>
+            <div id="monacoRoot" class="monaco-root"></div>
+            <textarea id="editorFallback" class="editor" spellcheck="false"># Monaco not loaded. Fallback editor active.</textarea>
+          </section>
 
-          <div class="meta">
-            <label for="checkpointId">Checkpoint ID</label>
-            <input id="checkpointId" class="ui-control" placeholder="Checkpoint id" />
-          </div>
-
-          <h3>API Response</h3>
-          <pre id="output" class="output"></pre>
+          <section class="card">
+            <h3>API Response</h3>
+            <pre id="output" class="output"></pre>
+          </section>
         </aside>
       </main>
     </div>
