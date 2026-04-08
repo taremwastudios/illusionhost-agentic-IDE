@@ -7,88 +7,91 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div class="app-shell">
+    <div class="app">
       <header class="topbar">
-        <div class="left-head">
+        <div class="brand-wrap">
           <img src="./assets/logo.png" alt="Illusionhost logo" class="logo" />
           <div>
             <p class="brand">Illusion<span>host</span></p>
-            <p class="sub">AI Workspace</p>
+            <p class="sub">VS Code-style Agent Workspace</p>
           </div>
           <span id="statusPill" class="pill idle">Idle</span>
         </div>
 
-        <div class="right-head">
+        <div class="actions">
           <select id="modeSelect" class="control compact">
             <option value="ask">Ask</option>
             <option value="code">Code</option>
           </select>
+          <button id="btnGithubLogin" class="btn compact">GitHub Login</button>
           <button id="themeToggle" class="btn compact ghost">Theme</button>
-          <button id="btnRun" class="btn compact accent">Run Agent</button>
         </div>
       </header>
 
-      <main class="workspace">
-        <aside class="panel left-panel">
+      <main class="layout">
+        <aside class="panel left">
           <section class="card">
-            <h3>Session</h3>
-            <div class="kv">
-              <span>User</span>
-              <strong id="sessionUser">Not detected</strong>
-            </div>
-            <div class="kv">
-              <span>Project</span>
-              <strong id="projectLabel">No project context</strong>
-            </div>
-            <div class="kv">
-              <span>Repo</span>
-              <strong id="repoLabel">No repo context</strong>
-            </div>
-            <div class="kv">
-              <span>Branch</span>
-              <strong id="branchLabel">No branch context</strong>
-            </div>
-            <p id="authHint" class="hint">Waiting for authenticated session...</p>
+            <h3>Account</h3>
+            <p id="authState" class="hint">Not authenticated</p>
+            <p id="userState" class="hint">No user session</p>
           </section>
 
-          <section class="card">
-            <h3>Checkpoint Control</h3>
-            <label for="checkpointId">Checkpoint ID</label>
-            <input id="checkpointId" class="control" placeholder="Checkpoint id" />
-            <div class="stack">
-              <button id="btnCheckpoint" class="btn">Create Checkpoint</button>
-              <button id="btnRollback" class="btn danger">Rollback</button>
+          <section class="card grow">
+            <div class="section-head">
+              <h3>Repositories</h3>
+              <button id="btnRefreshRepos" class="btn tiny">Refresh</button>
             </div>
+            <div id="repoList" class="list"></div>
+          </section>
+
+          <section class="card grow">
+            <div class="section-head">
+              <h3>Files</h3>
+              <span id="activeRepoLabel" class="muted">No repo</span>
+            </div>
+            <div id="fileTree" class="list"></div>
           </section>
         </aside>
 
-        <section class="panel center-panel">
-          <div class="panel-head">
-            <h3>Agent Thread</h3>
+        <section class="panel center">
+          <div class="section-head">
+            <h3>Editor</h3>
+            <div class="row-inline">
+              <span id="activeFileLabel" class="muted">No file selected</span>
+              <button id="btnApplyPatch" class="btn tiny">Apply AI Edit</button>
+            </div>
+          </div>
+
+          <div id="monacoRoot" class="monaco-root"></div>
+          <textarea id="editor" class="editor" spellcheck="false"># Select a repository and file.</textarea>
+
+          <div class="section-head space-top">
+            <h3>Changes</h3>
+            <button id="btnCreatePr" class="btn tiny accent">Create PR</button>
+          </div>
+          <pre id="changePreview" class="output">No staged AI edits.</pre>
+        </section>
+
+        <aside class="panel right">
+          <div class="section-head">
+            <h3>Agent Chat</h3>
             <span id="modeBadge" class="badge">ask</span>
           </div>
 
           <div id="thread" class="thread"></div>
 
           <div class="composer">
-            <textarea id="prompt" class="prompt" placeholder="Ask the agent to implement, refactor, or explain..."></textarea>
-          </div>
-        </section>
-
-        <aside class="panel right-panel">
-          <section class="card grow">
-            <div class="panel-head">
-              <h3>Editor</h3>
-              <span class="hint">Monaco-ready</span>
+            <textarea id="prompt" class="prompt" placeholder="Tell the AI what to change..."></textarea>
+            <div class="stack-row">
+              <button id="btnRun" class="btn accent">Run Agent</button>
+              <button id="btnCheckpoint" class="btn">Checkpoint</button>
+              <button id="btnRollback" class="btn danger">Rollback</button>
             </div>
-            <div id="monacoRoot" class="monaco-root"></div>
-            <textarea id="editorFallback" class="editor" spellcheck="false"># Monaco not loaded. Fallback editor active.</textarea>
-          </section>
+            <input id="checkpointId" class="control" placeholder="Checkpoint ID (for rollback)" />
+          </div>
 
-          <section class="card">
-            <h3>API Response</h3>
-            <pre id="output" class="output"></pre>
-          </section>
+          <h3 class="space-top">API Response</h3>
+          <pre id="output" class="output small"></pre>
         </aside>
       </main>
     </div>

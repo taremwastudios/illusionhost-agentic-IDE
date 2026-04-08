@@ -1,133 +1,67 @@
 const BASE_URL = "https://almifuvxnujzmsgdegpi.supabase.co/functions/v1/illusion-ai-router/ai";
 
-const modeSelect = document.getElementById("modeSelect");
-const modeBadge = document.getElementById("modeBadge");
-const promptEl = document.getElementById("prompt");
-const outputEl = document.getElementById("output");
-const checkpointInput = document.getElementById("checkpointId");
-const statusPill = document.getElementById("statusPill");
-const threadEl = document.getElementById("thread");
-const themeToggle = document.getElementById("themeToggle");
-
-const sessionUserEl = document.getElementById("sessionUser");
-const projectLabelEl = document.getElementById("projectLabel");
-const repoLabelEl = document.getElementById("repoLabel");
-const branchLabelEl = document.getElementById("branchLabel");
-const authHintEl = document.getElementById("authHint");
-
-const editorFallback = document.getElementById("editorFallback");
-const monacoRoot = document.getElementById("monacoRoot");
-
-const context = {
-  project_id: null,
-  owner: null,
+const state = {
+  mode: "ask",
   repo: null,
-  branch: null,
-  filePath: "controller.py",
+  filePath: null,
+  pendingPatch: null,
+  checkpointId: null,
+};
+
+const api = {
+  repos: "/github/repos",
+  files: "/github/files",
+  readFile: "/github/file",
+  writeFile: "/github/file",
+  createPr: "/github/pr",
+};
+
+const el = {
+  statusPill: document.getElementById("statusPill"),
+  authState: document.getElementById("authState"),
+  userState: document.getElementById("userState"),
+  repoList: document.getElementById("repoList"),
+  fileTree: document.getElementById("fileTree"),
+  activeRepoLabel: document.getElementById("activeRepoLabel"),
+  activeFileLabel: document.getElementById("activeFileLabel"),
+  modeSelect: document.getElementById("modeSelect"),
+  modeBadge: document.getElementById("modeBadge"),
+  thread: document.getElementById("thread"),
+  prompt: document.getElementById("prompt"),
+  editor: document.getElementById("editor"),
+  output: document.getElementById("output"),
+  changePreview: document.getElementById("changePreview"),
+  checkpointId: document.getElementById("checkpointId"),
+  monacoRoot: document.getElementById("monacoRoot"),
 };
 
 let monacoEditor = null;
 
-// Events
-modeSelect.addEventListener("change", () => {
-  modeBadge.textContent = modeSelect.value;
-});
-
-document.getElementById("btnRun").addEventListener("click", runAI);
+// ---------- init ----------
+document.getElementById("btnGithubLogin").addEventListener("click", githubLogin);
+document.getElementById("btnRefreshRepos").addEventListener("click", loadRepos);
+document.getElementById("btnRun").addEventListener("click", runAgent);
 document.getElementById("btnCheckpoint").addEventListener("click", createCheckpoint);
-document.getElementById("btnRollback").addEventListener("click", rollbackState);
+document.getElementById("btnRollback").addEventListener("click", rollback);
+document.getElementById("btnApplyPatch").addEventListener("click", applyAiEdit);
+document.getElementById("btnCreatePr").addEventListener("click", createPr);
 document.getElementById("themeToggle").addEventListener("click", toggleTheme);
 
-modeBadge.textContent = modeSelect.value;
-hydrateWorkspaceContext();
+el.modeSelect.addEventListener("change", () => {
+  state.mode = el.modeSelect.value;
+  el.modeBadge.textContent = state.mode;
+});
+
+state.mode = el.modeSelect.value;
+el.modeBadge.textContent = state.mode;
 initEditor();
-addMessage("assistant", "Session-based UI loaded. Ready for AI tasks.");
+hydrateSessionUI();
+addMessage("assistant", "Connect GitHub, pick a repository, and tell the agent what to edit.");
+loadRepos();
 
-function setStatus(text, type = "idle") {
-  statusPill.textContent = text;
-  statusPill.className = `pill ${type}`;
-}
-
-function setOutput(payload) {
-  outputEl.textContent = JSON.stringify(payload, null, 2);
-}
-
-function addMessage(role, text) {
-  const msg = document.createElement("div");
-  msg.className = `msg ${role}`;
-
-  const roleEl = document.createElement("div");
-  roleEl.className = "role";
-  roleEl.textContent = role;
-
-  const bubble = document.createElement("div");
-  bubble.className = "bubble";
-  bubble.textContent = text;
-
-  msg.append(roleEl, bubble);
-  threadEl.prepend(msg);
-}
-
-function getEditorValue() {
-  if (monacoEditor) return monacoEditor.getValue();
-  return editorFallback.value;
-}
-
-function setEditorValue(content) {
-  if (monacoEditor) {
-    monacoEditor.setValue(content);
-    return;
-  }
-  editorFallback.value = content;
-}
-
-function initEditor() {
-  if (window.monaco?.editor) {
-    monacoRoot.style.display = "block";
-    editorFallback.style.display = "none";
-
-    monacoEditor = window.monaco.editor.create(monacoRoot, {
-      value: editorFallback.value,
-      language: "python",
-      theme: document.documentElement.getAttribute("data-theme") === "light" ? "vs" : "vs-dark",
-      automaticLayout: true,
-      minimap: { enabled: true },
-      fontSize: 13,
-      lineNumbersMinChars: 3,
-    });
-  }
-}
-
-function hydrateWorkspaceContext() {
-  const runtimeCtx = window.__IDE_CONTEXT__ || {};
-
-  context.project_id = runtimeCtx.project_id || runtimeCtx.projectId || null;
-  context.owner = runtimeCtx.owner || null;
-  context.repo = runtimeCtx.repo || null;
-  context.branch = runtimeCtx.branch || null;
-  context.filePath = runtimeCtx.filePath || context.filePath;
-
-  projectLabelEl.textContent = context.project_id || "No project context";
-  repoLabelEl.textContent = context.repo ? `${context.owner || "?"}/${context.repo}` : "No repo context";
-  branchLabelEl.textContent = context.branch || "No branch context";
-
-  const session = getSession();
-  sessionUserEl.textContent = session?.user?.email || session?.user?.id || "Not detected";
-
-  authHintEl.textContent = session?.access_token
-    ? "Authenticated session detected."
-    : "No auth token found. Ensure app sets window.__SESSION__ or Supabase session.";
-}
-
+// ---------- session/auth ----------
 function getSession() {
   if (window.__SESSION__) return window.__SESSION__;
-
-  try {
-    const raw = localStorage.getItem("sb-session");
-    if (raw) return JSON.parse(raw);
-  } catch {
-    // ignore
-  }
 
   if (window.supabase?.auth?.session) {
     try {
@@ -140,66 +74,300 @@ function getSession() {
   return null;
 }
 
-function getAccessToken() {
+function getToken() {
   const session = getSession();
   return session?.access_token || session?.accessToken || null;
 }
 
-function requireContextAndAuth() {
-  const missing = [];
-  if (!context.project_id) missing.push("project_id (window.__IDE_CONTEXT__.project_id)");
-  if (!context.owner) missing.push("owner (window.__IDE_CONTEXT__.owner)");
-  if (!context.repo) missing.push("repo (window.__IDE_CONTEXT__.repo)");
-  if (!context.branch) missing.push("branch (window.__IDE_CONTEXT__.branch)");
+function hydrateSessionUI() {
+  const session = getSession();
+  const user = session?.user;
 
-  const token = getAccessToken();
-  if (!token) missing.push("session access token (window.__SESSION__.access_token)");
-
-  if (missing.length) {
-    throw new Error(`Missing runtime context: ${missing.join(", ")}`);
+  if (!session) {
+    el.authState.textContent = "Not authenticated. Click GitHub Login.";
+    el.userState.textContent = "No active session";
+    return;
   }
 
-  return token;
+  el.authState.textContent = "Authenticated via session";
+  el.userState.textContent = user?.email || user?.id || "Session user";
 }
 
-async function apiPost(path, body) {
-  const token = requireContextAndAuth();
+function githubLogin() {
+  if (window.__GITHUB_OAUTH_URL__) {
+    window.location.href = window.__GITHUB_OAUTH_URL__;
+    return;
+  }
 
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method: "POST",
+  addMessage("error", "No OAuth URL configured. Set window.__GITHUB_OAUTH_URL__ in host app.");
+}
+
+// ---------- UI helpers ----------
+function setStatus(text, kind = "idle") {
+  el.statusPill.textContent = text;
+  el.statusPill.className = `pill ${kind}`;
+}
+
+function setOutput(data) {
+  el.output.textContent = JSON.stringify(data, null, 2);
+}
+
+function addMessage(role, text) {
+  const row = document.createElement("div");
+  row.className = `msg ${role}`;
+
+  const r = document.createElement("div");
+  r.className = "role";
+  r.textContent = role;
+
+  const b = document.createElement("div");
+  b.className = "bubble";
+  b.textContent = text;
+
+  row.append(r, b);
+  el.thread.prepend(row);
+}
+
+function getEditorValue() {
+  return monacoEditor ? monacoEditor.getValue() : el.editor.value;
+}
+
+function setEditorValue(value) {
+  if (monacoEditor) {
+    monacoEditor.setValue(value);
+    return;
+  }
+  el.editor.value = value;
+}
+
+function initEditor() {
+  if (!window.monaco?.editor) return;
+
+  el.monacoRoot.style.display = "block";
+  el.editor.style.display = "none";
+
+  monacoEditor = window.monaco.editor.create(el.monacoRoot, {
+    value: el.editor.value,
+    language: "python",
+    theme: document.documentElement.getAttribute("data-theme") === "light" ? "vs" : "vs-dark",
+    automaticLayout: true,
+    minimap: { enabled: true },
+    fontSize: 13,
+  });
+}
+
+// ---------- API ----------
+async function authedFetch(path, opts = {}) {
+  const token = getToken();
+  if (!token) throw new Error("No authenticated session token.");
+
+  const res = await fetch(path, {
+    ...opts,
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
+      ...(opts.headers || {}),
     },
-    body: JSON.stringify(body),
   });
 
-  let data;
-  try {
-    data = await res.json();
-  } catch {
-    data = { error: "Invalid JSON response" };
-  }
-
-  if (!res.ok) {
-    throw new Error(data.error || `Request failed (${res.status})`);
-  }
-
+  const data = await res.json().catch(() => ({ error: "Invalid JSON" }));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
   return data;
+}
+
+function getMockRepos() {
+  return [
+    { id: "1", owner: "taremwastudios", name: "illusionhost-agentic-IDE", branch: "main" },
+    { id: "2", owner: "taremwastudios", name: "illusionhost-web", branch: "main" },
+  ];
+}
+
+function getMockFiles() {
+  return ["frontend/index.html", "frontend/styles.css", "frontend/app.js", "controller.py"];
+}
+
+async function loadRepos() {
+  hydrateSessionUI();
+  setStatus("Loading", "running");
+
+  try {
+    let repos = [];
+    try {
+      const data = await authedFetch(api.repos);
+      repos = data.repos || [];
+    } catch {
+      repos = getMockRepos();
+      addMessage("assistant", "Using mock repos (configure /github/repos endpoint to use live data).");
+    }
+
+    renderRepoList(repos);
+    setStatus("Idle", "idle");
+  } catch (err) {
+    addMessage("error", err.message);
+    setStatus("Error", "error");
+  }
+}
+
+function renderRepoList(repos) {
+  el.repoList.innerHTML = "";
+
+  if (!repos.length) {
+    el.repoList.innerHTML = '<div class="muted">No repositories found.</div>';
+    return;
+  }
+
+  repos.forEach((repo) => {
+    const item = document.createElement("button");
+    item.className = "item";
+    item.textContent = `${repo.owner}/${repo.name}`;
+    item.onclick = () => selectRepo(repo, item);
+    el.repoList.appendChild(item);
+  });
+}
+
+async function selectRepo(repo, element) {
+  state.repo = repo;
+  document.querySelectorAll("#repoList .item").forEach((x) => x.classList.remove("active"));
+  element.classList.add("active");
+  el.activeRepoLabel.textContent = `${repo.owner}/${repo.name}@${repo.branch || "main"}`;
+
+  try {
+    let files;
+    try {
+      const data = await authedFetch(api.files, {
+        method: "POST",
+        body: JSON.stringify({ owner: repo.owner, repo: repo.name, branch: repo.branch || "main", path: "" }),
+      });
+      files = data.files || [];
+    } catch {
+      files = getMockFiles();
+    }
+
+    renderFiles(files);
+    addMessage("assistant", `Repository loaded: ${repo.owner}/${repo.name}`);
+  } catch (err) {
+    addMessage("error", err.message);
+  }
+}
+
+function renderFiles(files) {
+  el.fileTree.innerHTML = "";
+
+  files.forEach((path) => {
+    const item = document.createElement("button");
+    item.className = "item";
+    item.textContent = path;
+    item.onclick = () => openFile(path, item);
+    el.fileTree.appendChild(item);
+  });
+}
+
+async function openFile(path, element) {
+  if (!state.repo) return;
+
+  state.filePath = path;
+  document.querySelectorAll("#fileTree .item").forEach((x) => x.classList.remove("active"));
+  element.classList.add("active");
+  el.activeFileLabel.textContent = path;
+
+  try {
+    let content;
+
+    try {
+      const data = await authedFetch(api.readFile, {
+        method: "POST",
+        body: JSON.stringify({
+          owner: state.repo.owner,
+          repo: state.repo.name,
+          branch: state.repo.branch || "main",
+          path,
+        }),
+      });
+      content = data.content || "";
+    } catch {
+      content = `# Mock content\n# ${path}\n`;
+    }
+
+    setEditorValue(content);
+  } catch (err) {
+    addMessage("error", err.message);
+  }
+}
+
+// ---------- Agent actions ----------
+async function runAgent() {
+  try {
+    if (!state.repo) throw new Error("Select a repository first.");
+    if (!state.filePath) throw new Error("Select a file first.");
+
+    const prompt = el.prompt.value.trim();
+    if (!prompt) throw new Error("Prompt is required.");
+
+    addMessage("user", prompt);
+    setStatus("Running", "running");
+
+    const data = await authedFetch(`${BASE_URL}/run`, {
+      method: "POST",
+      body: JSON.stringify({
+        project_id: window.__IDE_CONTEXT__?.project_id,
+        mode: state.mode,
+        userPrompt: prompt,
+        fileContext: getEditorValue(),
+        owner: state.repo.owner,
+        repo: state.repo.name,
+        branch: state.repo.branch || "main",
+        filePath: state.filePath,
+      }),
+    });
+
+    if (data.applied_code) {
+      state.pendingPatch = data.applied_code;
+      el.changePreview.textContent = data.applied_code;
+      addMessage("assistant", "I prepared an edit. Click 'Apply AI Edit' to put it in the editor.");
+    } else {
+      addMessage("assistant", data.message || "Run complete.");
+    }
+
+    if (data.checkpoint_id) {
+      state.checkpointId = data.checkpoint_id;
+      el.checkpointId.value = data.checkpoint_id;
+    }
+
+    setOutput(data);
+    setStatus("Idle", "idle");
+  } catch (err) {
+    setOutput({ error: err.message });
+    addMessage("error", err.message);
+    setStatus("Error", "error");
+  }
+}
+
+function applyAiEdit() {
+  if (!state.pendingPatch) {
+    addMessage("error", "No AI edit available. Run the agent first.");
+    return;
+  }
+  setEditorValue(state.pendingPatch);
+  addMessage("assistant", "Applied AI edit to editor.");
 }
 
 async function createCheckpoint() {
   try {
+    if (!state.repo) throw new Error("Select a repository first.");
     setStatus("Working", "running");
 
-    const data = await apiPost("/checkpoints", {
-      project_id: context.project_id,
-      owner: context.owner,
-      repo: context.repo,
-      branch: context.branch,
+    const data = await authedFetch(`${BASE_URL}/checkpoints`, {
+      method: "POST",
+      body: JSON.stringify({
+        project_id: window.__IDE_CONTEXT__?.project_id,
+        owner: state.repo.owner,
+        repo: state.repo.name,
+        branch: state.repo.branch || "main",
+      }),
     });
 
-    checkpointInput.value = data.checkpoint_id || "";
+    state.checkpointId = data.checkpoint_id;
+    el.checkpointId.value = data.checkpoint_id || "";
     setOutput(data);
     addMessage("assistant", `Checkpoint created: ${data.checkpoint_id || "unknown"}`);
     setStatus("Idle", "idle");
@@ -210,57 +378,25 @@ async function createCheckpoint() {
   }
 }
 
-async function runAI() {
+async function rollback() {
   try {
-    const prompt = promptEl.value.trim();
-    if (!prompt) throw new Error("Prompt is required.");
+    if (!state.repo) throw new Error("Select a repository first.");
 
-    addMessage("user", prompt);
-    setStatus("Running", "running");
-
-    const data = await apiPost("/run", {
-      project_id: context.project_id,
-      mode: modeSelect.value,
-      userPrompt: prompt,
-      fileContext: getEditorValue(),
-      owner: context.owner,
-      repo: context.repo,
-      branch: context.branch,
-      filePath: context.filePath,
-    });
-
-    if (data.applied_code) {
-      setEditorValue(data.applied_code);
-    }
-
-    if (data.checkpoint_id) {
-      checkpointInput.value = data.checkpoint_id;
-    }
-
-    setOutput(data);
-    addMessage("assistant", data.message || "Run complete.");
-    setStatus("Idle", "idle");
-  } catch (err) {
-    setOutput({ error: err.message });
-    addMessage("error", err.message);
-    setStatus("Error", "error");
-  }
-}
-
-async function rollbackState() {
-  try {
-    const checkpoint_id = checkpointInput.value.trim();
-    if (!checkpoint_id) throw new Error("checkpoint_id is required");
+    const checkpoint_id = el.checkpointId.value.trim();
+    if (!checkpoint_id) throw new Error("Checkpoint ID required.");
 
     setStatus("Rolling Back", "running");
 
-    const data = await apiPost("/return-state", {
-      project_id: context.project_id,
-      owner: context.owner,
-      repo: context.repo,
-      branch: context.branch,
-      checkpoint_id,
-      reason: "Manual rollback from UI",
+    const data = await authedFetch(`${BASE_URL}/return-state`, {
+      method: "POST",
+      body: JSON.stringify({
+        project_id: window.__IDE_CONTEXT__?.project_id,
+        owner: state.repo.owner,
+        repo: state.repo.name,
+        branch: state.repo.branch || "main",
+        checkpoint_id,
+        reason: "Manual rollback from IDE UI",
+      }),
     });
 
     setOutput(data);
@@ -270,6 +406,39 @@ async function rollbackState() {
     setOutput({ error: err.message });
     addMessage("error", err.message);
     setStatus("Error", "error");
+  }
+}
+
+async function createPr() {
+  try {
+    if (!state.repo) throw new Error("Select a repository first.");
+    if (!state.filePath) throw new Error("Select a file first.");
+
+    const title = `AI edit: ${state.filePath}`;
+    const body = "Generated from Illusionhost Agent Workspace";
+
+    const data = await authedFetch(api.createPr, {
+      method: "POST",
+      body: JSON.stringify({
+        owner: state.repo.owner,
+        repo: state.repo.name,
+        base_branch: state.repo.branch || "main",
+        title,
+        body,
+        filePath: state.filePath,
+        content: getEditorValue(),
+      }),
+    }).catch(() => ({
+      mock: true,
+      message: "PR endpoint not wired yet. UI flow is ready.",
+      title,
+    }));
+
+    setOutput(data);
+    addMessage("assistant", data.message || "PR request submitted.");
+  } catch (err) {
+    setOutput({ error: err.message });
+    addMessage("error", err.message);
   }
 }
 
