@@ -9,58 +9,52 @@
   <body>
     <div class="app-shell">
       <header class="topbar">
-        <div class="topbar-left">
+        <div class="left-head">
           <img src="./assets/logo.png" alt="Illusionhost logo" class="logo" />
-          <div class="brand-block">
-            <div class="brand-title">Illusion<span>host</span></div>
-            <div class="brand-sub">Agent Workspace</div>
+          <div>
+            <p class="brand">Illusion<span>host</span></p>
+            <p class="sub">AI Workspace</p>
           </div>
           <span id="statusPill" class="pill idle">Idle</span>
         </div>
 
-        <div class="topbar-right">
-          <select id="modeSelect" class="input compact">
+        <div class="right-head">
+          <select id="modeSelect" class="control compact">
             <option value="ask">Ask</option>
             <option value="code">Code</option>
           </select>
           <button id="themeToggle" class="btn compact ghost">Theme</button>
-          <button id="saveConfig" class="btn compact">Save</button>
+          <button id="btnRun" class="btn compact accent">Run Agent</button>
         </div>
       </header>
 
       <main class="workspace">
-        <!-- LEFT: Context / Workspace -->
-        <aside class="panel left">
-          <section class="section">
-            <h3>Workspace</h3>
-            <label>Project ID</label>
-            <input id="projectId" class="input" placeholder="project uuid" />
-
-            <label>Owner</label>
-            <input id="ownerInput" class="input" placeholder="taremwastudios" />
-
-            <label>Repository</label>
-            <input id="repoInput" class="input" placeholder="illusionhost-agentic-IDE" />
-
-            <div class="row-2">
-              <div>
-                <label>Branch</label>
-                <input id="branchInput" class="input" placeholder="main" />
-              </div>
-              <div>
-                <label>File Path</label>
-                <input id="filePathInput" class="input" placeholder="controller.py" />
-              </div>
+        <aside class="panel left-panel">
+          <section class="card">
+            <h3>Session</h3>
+            <div class="kv">
+              <span>User</span>
+              <strong id="sessionUser">Not detected</strong>
             </div>
-
-            <label>Access Token</label>
-            <input id="tokenInput" type="password" class="input" placeholder="Supabase bearer token" />
+            <div class="kv">
+              <span>Project</span>
+              <strong id="projectLabel">No project context</strong>
+            </div>
+            <div class="kv">
+              <span>Repo</span>
+              <strong id="repoLabel">No repo context</strong>
+            </div>
+            <div class="kv">
+              <span>Branch</span>
+              <strong id="branchLabel">No branch context</strong>
+            </div>
+            <p id="authHint" class="hint">Waiting for authenticated session...</p>
           </section>
 
-          <section class="section">
-            <h3>Session</h3>
-            <label>Checkpoint ID</label>
-            <input id="checkpointId" class="input" placeholder="checkpoint id" />
+          <section class="card">
+            <h3>Checkpoint Control</h3>
+            <label for="checkpointId">Checkpoint ID</label>
+            <input id="checkpointId" class="control" placeholder="Checkpoint id" />
             <div class="stack">
               <button id="btnCheckpoint" class="btn">Create Checkpoint</button>
               <button id="btnRollback" class="btn danger">Rollback</button>
@@ -68,43 +62,31 @@
           </section>
         </aside>
 
-        <!-- CENTER: Agent Chat + Prompt -->
-        <section class="panel center">
-          <div class="center-head">
+        <section class="panel center-panel">
+          <div class="panel-head">
             <h3>Agent Thread</h3>
-            <div class="meta-inline">
-              <span class="meta-k">Mode</span>
-              <span id="modeBadge" class="meta-v">ask</span>
-            </div>
+            <span id="modeBadge" class="badge">ask</span>
           </div>
 
           <div id="thread" class="thread"></div>
 
           <div class="composer">
-            <textarea
-              id="prompt"
-              class="prompt"
-              placeholder="Ask the agent to edit, explain, or implement changes..."
-            ></textarea>
-            <div class="composer-actions">
-              <button id="btnRun" class="btn accent">Run Agent</button>
-            </div>
+            <textarea id="prompt" class="prompt" placeholder="Ask the agent to implement, refactor, or explain..."></textarea>
           </div>
         </section>
 
-        <!-- RIGHT: Code + API -->
-        <aside class="panel right">
-          <section class="section grow">
-            <div class="section-head">
-              <h3>Code Context</h3>
+        <aside class="panel right-panel">
+          <section class="card grow">
+            <div class="panel-head">
+              <h3>Editor</h3>
+              <span class="hint">Monaco-ready</span>
             </div>
-            <textarea id="editor" class="editor" spellcheck="false"># Start editing...</textarea>
+            <div id="monacoRoot" class="monaco-root"></div>
+            <textarea id="editorFallback" class="editor" spellcheck="false"># Monaco not loaded. Fallback editor active.</textarea>
           </section>
 
-          <section class="section">
-            <div class="section-head">
-              <h3>Response</h3>
-            </div>
+          <section class="card">
+            <h3>API Response</h3>
             <pre id="output" class="output"></pre>
           </section>
         </aside>

@@ -1,64 +1,60 @@
 const BASE_URL = "https://almifuvxnujzmsgdegpi.supabase.co/functions/v1/illusion-ai-router/ai";
-const STORAGE_KEY = "illusion_ui_config_v2";
-
-const state = {
-  projectId: "",
-  owner: "taremwastudios",
-  repo: "illusionhost-agentic-IDE",
-  branch: "main",
-  filePath: "controller.py",
-  accessToken: "",
-};
 
 const modeSelect = document.getElementById("modeSelect");
 const modeBadge = document.getElementById("modeBadge");
 const promptEl = document.getElementById("prompt");
-const editorEl = document.getElementById("editor");
 const outputEl = document.getElementById("output");
 const checkpointInput = document.getElementById("checkpointId");
-const themeToggle = document.getElementById("themeToggle");
 const statusPill = document.getElementById("statusPill");
 const threadEl = document.getElementById("thread");
+const themeToggle = document.getElementById("themeToggle");
 
-const projectIdInput = document.getElementById("projectId");
-const ownerInput = document.getElementById("ownerInput");
-const repoInput = document.getElementById("repoInput");
-const branchInput = document.getElementById("branchInput");
-const filePathInput = document.getElementById("filePathInput");
-const tokenInput = document.getElementById("tokenInput");
-const saveConfigBtn = document.getElementById("saveConfig");
+const sessionUserEl = document.getElementById("sessionUser");
+const projectLabelEl = document.getElementById("projectLabel");
+const repoLabelEl = document.getElementById("repoLabel");
+const branchLabelEl = document.getElementById("branchLabel");
+const authHintEl = document.getElementById("authHint");
 
-const btnRun = document.getElementById("btnRun");
-const btnCheckpoint = document.getElementById("btnCheckpoint");
-const btnRollback = document.getElementById("btnRollback");
+const editorFallback = document.getElementById("editorFallback");
+const monacoRoot = document.getElementById("monacoRoot");
+
+const context = {
+  project_id: null,
+  owner: null,
+  repo: null,
+  branch: null,
+  filePath: "controller.py",
+};
+
+let monacoEditor = null;
 
 // Events
-btnRun.addEventListener("click", runAI);
-btnCheckpoint.addEventListener("click", createCheckpoint);
-btnRollback.addEventListener("click", rollbackState);
-saveConfigBtn.addEventListener("click", saveConfig);
-themeToggle.addEventListener("click", toggleTheme);
 modeSelect.addEventListener("change", () => {
   modeBadge.textContent = modeSelect.value;
 });
 
-// Init
-hydrateConfig();
-modeBadge.textContent = modeSelect.value;
-addMessage("assistant", "Workspace ready. Configure credentials and run your first task.");
+document.getElementById("btnRun").addEventListener("click", runAI);
+document.getElementById("btnCheckpoint").addEventListener("click", createCheckpoint);
+document.getElementById("btnRollback").addEventListener("click", rollbackState);
+document.getElementById("themeToggle").addEventListener("click", toggleTheme);
 
-function setStatus(text, kind = "idle") {
+modeBadge.textContent = modeSelect.value;
+hydrateWorkspaceContext();
+initEditor();
+addMessage("assistant", "Session-based UI loaded. Ready for AI tasks.");
+
+function setStatus(text, type = "idle") {
   statusPill.textContent = text;
-  statusPill.className = `pill ${kind}`;
+  statusPill.className = `pill ${type}`;
 }
 
 function setOutput(payload) {
   outputEl.textContent = JSON.stringify(payload, null, 2);
 }
 
-function addMessage(role, content) {
-  const item = document.createElement("div");
-  item.className = `msg ${role}`;
+function addMessage(role, text) {
+  const msg = document.createElement("div");
+  msg.className = `msg ${role}`;
 
   const roleEl = document.createElement("div");
   roleEl.className = "role";
@@ -66,132 +62,141 @@ function addMessage(role, content) {
 
   const bubble = document.createElement("div");
   bubble.className = "bubble";
-  bubble.textContent = content;
+  bubble.textContent = text;
 
-  item.append(roleEl, bubble);
-  threadEl.prepend(item);
+  msg.append(roleEl, bubble);
+  threadEl.prepend(msg);
 }
 
-function hydrateConfig() {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) {
+function getEditorValue() {
+  if (monacoEditor) return monacoEditor.getValue();
+  return editorFallback.value;
+}
+
+function setEditorValue(content) {
+  if (monacoEditor) {
+    monacoEditor.setValue(content);
+    return;
+  }
+  editorFallback.value = content;
+}
+
+function initEditor() {
+  if (window.monaco?.editor) {
+    monacoRoot.style.display = "block";
+    editorFallback.style.display = "none";
+
+    monacoEditor = window.monaco.editor.create(monacoRoot, {
+      value: editorFallback.value,
+      language: "python",
+      theme: document.documentElement.getAttribute("data-theme") === "light" ? "vs" : "vs-dark",
+      automaticLayout: true,
+      minimap: { enabled: true },
+      fontSize: 13,
+      lineNumbersMinChars: 3,
+    });
+  }
+}
+
+function hydrateWorkspaceContext() {
+  const runtimeCtx = window.__IDE_CONTEXT__ || {};
+
+  context.project_id = runtimeCtx.project_id || runtimeCtx.projectId || null;
+  context.owner = runtimeCtx.owner || null;
+  context.repo = runtimeCtx.repo || null;
+  context.branch = runtimeCtx.branch || null;
+  context.filePath = runtimeCtx.filePath || context.filePath;
+
+  projectLabelEl.textContent = context.project_id || "No project context";
+  repoLabelEl.textContent = context.repo ? `${context.owner || "?"}/${context.repo}` : "No repo context";
+  branchLabelEl.textContent = context.branch || "No branch context";
+
+  const session = getSession();
+  sessionUserEl.textContent = session?.user?.email || session?.user?.id || "Not detected";
+
+  authHintEl.textContent = session?.access_token
+    ? "Authenticated session detected."
+    : "No auth token found. Ensure app sets window.__SESSION__ or Supabase session.";
+}
+
+function getSession() {
+  if (window.__SESSION__) return window.__SESSION__;
+
+  try {
+    const raw = localStorage.getItem("sb-session");
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // ignore
+  }
+
+  if (window.supabase?.auth?.session) {
     try {
-      Object.assign(state, JSON.parse(saved));
+      return window.supabase.auth.session();
     } catch {
-      // ignore malformed local state
+      // ignore
     }
   }
 
-  projectIdInput.value = state.projectId;
-  ownerInput.value = state.owner;
-  repoInput.value = state.repo;
-  branchInput.value = state.branch;
-  filePathInput.value = state.filePath;
-  tokenInput.value = state.accessToken;
+  return null;
 }
 
-function saveConfig(announce = true) {
-  state.projectId = projectIdInput.value.trim();
-  state.owner = ownerInput.value.trim();
-  state.repo = repoInput.value.trim();
-  state.branch = branchInput.value.trim();
-  state.filePath = filePathInput.value.trim();
-  state.accessToken = tokenInput.value.trim();
-
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-
-  if (announce) {
-    setOutput({ ok: true, message: "Configuration saved locally" });
-    addMessage("assistant", "Configuration saved.");
-  }
+function getAccessToken() {
+  const session = getSession();
+  return session?.access_token || session?.accessToken || null;
 }
 
-function validateConfig() {
+function requireContextAndAuth() {
   const missing = [];
-  if (!state.projectId) missing.push("project_id");
-  if (!state.owner) missing.push("owner");
-  if (!state.repo) missing.push("repo");
-  if (!state.branch) missing.push("branch");
-  if (!state.filePath) missing.push("filePath");
-  if (!state.accessToken) missing.push("access token");
+  if (!context.project_id) missing.push("project_id (window.__IDE_CONTEXT__.project_id)");
+  if (!context.owner) missing.push("owner (window.__IDE_CONTEXT__.owner)");
+  if (!context.repo) missing.push("repo (window.__IDE_CONTEXT__.repo)");
+  if (!context.branch) missing.push("branch (window.__IDE_CONTEXT__.branch)");
+
+  const token = getAccessToken();
+  if (!token) missing.push("session access token (window.__SESSION__.access_token)");
 
   if (missing.length) {
-    throw new Error(`Missing required fields: ${missing.join(", ")}`);
+    throw new Error(`Missing runtime context: ${missing.join(", ")}`);
   }
+
+  return token;
 }
 
 async function apiPost(path, body) {
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const token = requireContextAndAuth();
+
+  const res = await fetch(`${BASE_URL}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${state.accessToken}`,
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(body),
   });
 
   let data;
   try {
-    data = await response.json();
+    data = await res.json();
   } catch {
-    data = { error: "Invalid JSON response from API" };
+    data = { error: "Invalid JSON response" };
   }
 
-  if (!response.ok) {
-    const msg = data?.error || `Request failed (${response.status})`;
-    throw new Error(msg);
+  if (!res.ok) {
+    throw new Error(data.error || `Request failed (${res.status})`);
   }
 
   return data;
 }
 
-async function runAI() {
-  try {
-    saveConfig(false);
-    validateConfig();
-
-    const prompt = promptEl.value.trim();
-    if (!prompt) throw new Error("Prompt is required.");
-
-    addMessage("user", prompt);
-    setStatus("Running", "running");
-
-    const data = await apiPost("/run", {
-      project_id: state.projectId,
-      mode: modeSelect.value,
-      userPrompt: prompt,
-      fileContext: editorEl.value,
-      owner: state.owner,
-      repo: state.repo,
-      branch: state.branch,
-      filePath: state.filePath,
-    });
-
-    if (data.applied_code) editorEl.value = data.applied_code;
-    if (data.checkpoint_id) checkpointInput.value = data.checkpoint_id;
-
-    setOutput(data);
-    addMessage("assistant", data.message || "Run complete.");
-    setStatus("Idle", "idle");
-  } catch (err) {
-    const message = err?.message || "Run failed.";
-    setOutput({ error: message });
-    addMessage("error", message);
-    setStatus("Error", "error");
-  }
-}
-
 async function createCheckpoint() {
   try {
-    saveConfig(false);
-    validateConfig();
     setStatus("Working", "running");
 
     const data = await apiPost("/checkpoints", {
-      project_id: state.projectId,
-      owner: state.owner,
-      repo: state.repo,
-      branch: state.branch,
+      project_id: context.project_id,
+      owner: context.owner,
+      repo: context.repo,
+      branch: context.branch,
     });
 
     checkpointInput.value = data.checkpoint_id || "";
@@ -199,39 +204,71 @@ async function createCheckpoint() {
     addMessage("assistant", `Checkpoint created: ${data.checkpoint_id || "unknown"}`);
     setStatus("Idle", "idle");
   } catch (err) {
-    const message = err?.message || "Checkpoint failed.";
-    setOutput({ error: message });
-    addMessage("error", message);
+    setOutput({ error: err.message });
+    addMessage("error", err.message);
+    setStatus("Error", "error");
+  }
+}
+
+async function runAI() {
+  try {
+    const prompt = promptEl.value.trim();
+    if (!prompt) throw new Error("Prompt is required.");
+
+    addMessage("user", prompt);
+    setStatus("Running", "running");
+
+    const data = await apiPost("/run", {
+      project_id: context.project_id,
+      mode: modeSelect.value,
+      userPrompt: prompt,
+      fileContext: getEditorValue(),
+      owner: context.owner,
+      repo: context.repo,
+      branch: context.branch,
+      filePath: context.filePath,
+    });
+
+    if (data.applied_code) {
+      setEditorValue(data.applied_code);
+    }
+
+    if (data.checkpoint_id) {
+      checkpointInput.value = data.checkpoint_id;
+    }
+
+    setOutput(data);
+    addMessage("assistant", data.message || "Run complete.");
+    setStatus("Idle", "idle");
+  } catch (err) {
+    setOutput({ error: err.message });
+    addMessage("error", err.message);
     setStatus("Error", "error");
   }
 }
 
 async function rollbackState() {
   try {
-    saveConfig(false);
-    validateConfig();
-
-    const checkpointId = checkpointInput.value.trim();
-    if (!checkpointId) throw new Error("checkpoint_id is required");
+    const checkpoint_id = checkpointInput.value.trim();
+    if (!checkpoint_id) throw new Error("checkpoint_id is required");
 
     setStatus("Rolling Back", "running");
 
     const data = await apiPost("/return-state", {
-      project_id: state.projectId,
-      owner: state.owner,
-      repo: state.repo,
-      branch: state.branch,
-      checkpoint_id: checkpointId,
+      project_id: context.project_id,
+      owner: context.owner,
+      repo: context.repo,
+      branch: context.branch,
+      checkpoint_id,
       reason: "Manual rollback from UI",
     });
 
     setOutput(data);
-    addMessage("assistant", `Rollback complete: ${checkpointId}`);
+    addMessage("assistant", `Rollback complete for ${checkpoint_id}`);
     setStatus("Idle", "idle");
   } catch (err) {
-    const message = err?.message || "Rollback failed.";
-    setOutput({ error: message });
-    addMessage("error", message);
+    setOutput({ error: err.message });
+    addMessage("error", err.message);
     setStatus("Error", "error");
   }
 }
@@ -239,5 +276,10 @@ async function rollbackState() {
 function toggleTheme() {
   const html = document.documentElement;
   const current = html.getAttribute("data-theme") || "dark";
-  html.setAttribute("data-theme", current === "dark" ? "light" : "dark");
+  const next = current === "dark" ? "light" : "dark";
+  html.setAttribute("data-theme", next);
+
+  if (monacoEditor && window.monaco?.editor) {
+    window.monaco.editor.setTheme(next === "light" ? "vs" : "vs-dark");
+  }
 }
