@@ -1,5 +1,5 @@
 const BASE_URL = "https://almifuvxnujzmsgdegpi.supabase.co/functions/v1/illusion-ai-router/ai";
-const STORAGE_KEY = "illusion_ui_config_v1";
+const STORAGE_KEY = "illusion_ui_config_v2";
 
 const state = {
   projectId: "",
@@ -11,13 +11,14 @@ const state = {
 };
 
 const modeSelect = document.getElementById("modeSelect");
+const modeBadge = document.getElementById("modeBadge");
 const promptEl = document.getElementById("prompt");
 const editorEl = document.getElementById("editor");
 const outputEl = document.getElementById("output");
 const checkpointInput = document.getElementById("checkpointId");
 const themeToggle = document.getElementById("themeToggle");
-const statusEl = document.getElementById("agentStatus");
-const timelineEl = document.getElementById("timeline");
+const statusPill = document.getElementById("statusPill");
+const threadEl = document.getElementById("thread");
 
 const projectIdInput = document.getElementById("projectId");
 const ownerInput = document.getElementById("ownerInput");
@@ -27,46 +28,57 @@ const filePathInput = document.getElementById("filePathInput");
 const tokenInput = document.getElementById("tokenInput");
 const saveConfigBtn = document.getElementById("saveConfig");
 
-document.getElementById("btnCheckpoint").addEventListener("click", createCheckpoint);
-document.getElementById("btnRun").addEventListener("click", runAI);
-document.getElementById("btnRollback").addEventListener("click", rollbackState);
-themeToggle.addEventListener("click", toggleTheme);
+const btnRun = document.getElementById("btnRun");
+const btnCheckpoint = document.getElementById("btnCheckpoint");
+const btnRollback = document.getElementById("btnRollback");
+
+// Events
+btnRun.addEventListener("click", runAI);
+btnCheckpoint.addEventListener("click", createCheckpoint);
+btnRollback.addEventListener("click", rollbackState);
 saveConfigBtn.addEventListener("click", saveConfig);
+themeToggle.addEventListener("click", toggleTheme);
+modeSelect.addEventListener("change", () => {
+  modeBadge.textContent = modeSelect.value;
+});
 
+// Init
 hydrateConfig();
-renderTimeline("system", "Welcome. Configure your workspace and run an AI task.");
+modeBadge.textContent = modeSelect.value;
+addMessage("assistant", "Workspace ready. Configure credentials and run your first task.");
 
-function setOutput(obj) {
-  outputEl.textContent = JSON.stringify(obj, null, 2);
+function setStatus(text, kind = "idle") {
+  statusPill.textContent = text;
+  statusPill.className = `pill ${kind}`;
 }
 
-function setStatus(text, type = "idle") {
-  statusEl.textContent = text;
-  statusEl.className = `status-badge ${type}`;
+function setOutput(payload) {
+  outputEl.textContent = JSON.stringify(payload, null, 2);
 }
 
-function renderTimeline(role, message) {
-  const entry = document.createElement("div");
-  entry.className = "entry";
+function addMessage(role, content) {
+  const item = document.createElement("div");
+  item.className = `msg ${role}`;
 
   const roleEl = document.createElement("div");
   roleEl.className = "role";
   roleEl.textContent = role;
 
-  const msgEl = document.createElement("p");
-  msgEl.textContent = message;
+  const bubble = document.createElement("div");
+  bubble.className = "bubble";
+  bubble.textContent = content;
 
-  entry.append(roleEl, msgEl);
-  timelineEl.prepend(entry);
+  item.append(roleEl, bubble);
+  threadEl.prepend(item);
 }
 
 function hydrateConfig() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (raw) {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) {
     try {
-      Object.assign(state, JSON.parse(raw));
+      Object.assign(state, JSON.parse(saved));
     } catch {
-      // ignore malformed cache
+      // ignore malformed local state
     }
   }
 
@@ -78,7 +90,7 @@ function hydrateConfig() {
   tokenInput.value = state.accessToken;
 }
 
-function saveConfig() {
+function saveConfig(announce = true) {
   state.projectId = projectIdInput.value.trim();
   state.owner = ownerInput.value.trim();
   state.repo = repoInput.value.trim();
@@ -87,8 +99,11 @@ function saveConfig() {
   state.accessToken = tokenInput.value.trim();
 
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  setOutput({ ok: true, message: "Configuration saved locally" });
-  renderTimeline("system", "Configuration saved.");
+
+  if (announce) {
+    setOutput({ ok: true, message: "Configuration saved locally" });
+    addMessage("assistant", "Configuration saved.");
+  }
 }
 
 function validateConfig() {
@@ -101,12 +116,12 @@ function validateConfig() {
   if (!state.accessToken) missing.push("access token");
 
   if (missing.length) {
-    throw { error: `Missing required fields: ${missing.join(", ")}` };
+    throw new Error(`Missing required fields: ${missing.join(", ")}`);
   }
 }
 
 async function apiPost(path, body) {
-  const res = await fetch(`${BASE_URL}${path}`, {
+  const response = await fetch(`${BASE_URL}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -115,14 +130,60 @@ async function apiPost(path, body) {
     body: JSON.stringify(body),
   });
 
-  const data = await res.json();
-  if (!res.ok) throw data;
+  let data;
+  try {
+    data = await response.json();
+  } catch {
+    data = { error: "Invalid JSON response from API" };
+  }
+
+  if (!response.ok) {
+    const msg = data?.error || `Request failed (${response.status})`;
+    throw new Error(msg);
+  }
+
   return data;
+}
+
+async function runAI() {
+  try {
+    saveConfig(false);
+    validateConfig();
+
+    const prompt = promptEl.value.trim();
+    if (!prompt) throw new Error("Prompt is required.");
+
+    addMessage("user", prompt);
+    setStatus("Running", "running");
+
+    const data = await apiPost("/run", {
+      project_id: state.projectId,
+      mode: modeSelect.value,
+      userPrompt: prompt,
+      fileContext: editorEl.value,
+      owner: state.owner,
+      repo: state.repo,
+      branch: state.branch,
+      filePath: state.filePath,
+    });
+
+    if (data.applied_code) editorEl.value = data.applied_code;
+    if (data.checkpoint_id) checkpointInput.value = data.checkpoint_id;
+
+    setOutput(data);
+    addMessage("assistant", data.message || "Run complete.");
+    setStatus("Idle", "idle");
+  } catch (err) {
+    const message = err?.message || "Run failed.";
+    setOutput({ error: message });
+    addMessage("error", message);
+    setStatus("Error", "error");
+  }
 }
 
 async function createCheckpoint() {
   try {
-    saveConfig();
+    saveConfig(false);
     validateConfig();
     setStatus("Working", "running");
 
@@ -135,74 +196,42 @@ async function createCheckpoint() {
 
     checkpointInput.value = data.checkpoint_id || "";
     setOutput(data);
-    renderTimeline("assistant", `Checkpoint created: ${data.checkpoint_id || "unknown"}`);
+    addMessage("assistant", `Checkpoint created: ${data.checkpoint_id || "unknown"}`);
     setStatus("Idle", "idle");
-  } catch (e) {
-    setOutput(e);
-    renderTimeline("error", e.error || "Unable to create checkpoint.");
-    setStatus("Error", "error");
-  }
-}
-
-async function runAI() {
-  try {
-    saveConfig();
-    validateConfig();
-    const mode = modeSelect.value;
-
-    renderTimeline("user", promptEl.value || "(empty prompt)");
-    setStatus("Running", "running");
-
-    const data = await apiPost("/run", {
-      project_id: state.projectId,
-      mode,
-      userPrompt: promptEl.value,
-      fileContext: editorEl.value,
-      owner: state.owner,
-      repo: state.repo,
-      branch: state.branch,
-      filePath: state.filePath,
-    });
-
-    if (data.applied_code) editorEl.value = data.applied_code;
-    if (data.checkpoint_id) checkpointInput.value = data.checkpoint_id;
-
-    setOutput(data);
-    renderTimeline("assistant", data.message || "Run complete.");
-    setStatus("Idle", "idle");
-  } catch (e) {
-    setOutput(e);
-    renderTimeline("error", e.error || "AI run failed.");
+  } catch (err) {
+    const message = err?.message || "Checkpoint failed.";
+    setOutput({ error: message });
+    addMessage("error", message);
     setStatus("Error", "error");
   }
 }
 
 async function rollbackState() {
   try {
-    saveConfig();
+    saveConfig(false);
     validateConfig();
 
-    const checkpoint_id = checkpointInput.value.trim();
-    if (!checkpoint_id) {
-      throw { error: "checkpoint_id is required" };
-    }
+    const checkpointId = checkpointInput.value.trim();
+    if (!checkpointId) throw new Error("checkpoint_id is required");
 
     setStatus("Rolling Back", "running");
+
     const data = await apiPost("/return-state", {
       project_id: state.projectId,
       owner: state.owner,
       repo: state.repo,
       branch: state.branch,
-      checkpoint_id,
+      checkpoint_id: checkpointId,
       reason: "Manual rollback from UI",
     });
 
     setOutput(data);
-    renderTimeline("assistant", `Rollback complete for checkpoint ${checkpoint_id}.`);
+    addMessage("assistant", `Rollback complete: ${checkpointId}`);
     setStatus("Idle", "idle");
-  } catch (e) {
-    setOutput(e);
-    renderTimeline("error", e.error || "Rollback failed.");
+  } catch (err) {
+    const message = err?.message || "Rollback failed.";
+    setOutput({ error: message });
+    addMessage("error", message);
     setStatus("Error", "error");
   }
 }
