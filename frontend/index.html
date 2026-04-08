@@ -11,48 +11,87 @@
       <header class="topbar">
         <div class="brand">
           <img src="./assets/logo.png" alt="Illusionhost logo" class="logo" />
-          <span class="brand-text">Illusion<span class="host">host</span></span>
+          <div>
+            <span class="brand-text">Illusion<span class="host">host</span></span>
+            <p class="sub-brand">Agentic IDE</p>
+          </div>
         </div>
 
         <div class="top-actions">
-          <select id="modeSelect" class="ui-control">
+          <select id="modeSelect" class="ui-control compact">
             <option value="ask">Ask</option>
             <option value="code">Code</option>
           </select>
-          <button id="themeToggle" class="ui-btn">Toggle Theme</button>
+          <button id="themeToggle" class="ui-btn compact">Toggle Theme</button>
         </div>
       </header>
 
       <main class="layout">
         <aside class="panel left">
-          <h3>Files</h3>
-          <ul class="file-list">
-            <li>controller.py</li>
-            <li>index.html</li>
-            <li>styles.css</li>
-          </ul>
+          <h3>Workspace</h3>
+
+          <div class="meta-group">
+            <label for="projectId">Project ID</label>
+            <input id="projectId" class="ui-control" placeholder="project uuid" />
+          </div>
+
+          <div class="meta-group">
+            <label for="ownerInput">Owner</label>
+            <input id="ownerInput" class="ui-control" placeholder="org or username" />
+          </div>
+
+          <div class="meta-group">
+            <label for="repoInput">Repo</label>
+            <input id="repoInput" class="ui-control" placeholder="repository" />
+          </div>
+
+          <div class="meta-group">
+            <label for="branchInput">Branch</label>
+            <input id="branchInput" class="ui-control" placeholder="main" />
+          </div>
+
+          <div class="meta-group">
+            <label for="filePathInput">File Path</label>
+            <input id="filePathInput" class="ui-control" placeholder="controller.py" />
+          </div>
+
+          <div class="meta-group">
+            <label for="tokenInput">Supabase Access Token</label>
+            <input id="tokenInput" type="password" class="ui-control" placeholder="paste token" />
+          </div>
+
+          <button id="saveConfig" class="ui-btn">Save Configuration</button>
         </aside>
 
         <section class="panel center">
-          <h3>Editor</h3>
-          <textarea id="editor" class="editor" spellcheck="false"># Start editing...</textarea>
+          <div class="panel-head">
+            <h3>AI Agent Console</h3>
+            <span id="agentStatus" class="status-badge idle">Idle</span>
+          </div>
+
+          <div id="timeline" class="timeline"></div>
+
+          <div class="composer">
+            <label for="prompt">Prompt</label>
+            <textarea id="prompt" class="prompt" placeholder="Describe the task for the AI Agent..."></textarea>
+            <div class="btn-row horizontal">
+              <button id="btnRun" class="ui-btn accent">Run AI</button>
+              <button id="btnCheckpoint" class="ui-btn">Create Checkpoint</button>
+              <button id="btnRollback" class="ui-btn danger">Rollback</button>
+            </div>
+          </div>
         </section>
 
         <aside class="panel right">
-          <h3>AI</h3>
-          <textarea id="prompt" class="prompt" placeholder="Ask or instruct AI..."></textarea>
-
-          <div class="btn-row">
-            <button id="btnCheckpoint" class="ui-btn">Create Checkpoint</button>
-            <button id="btnRun" class="ui-btn accent">Run AI</button>
-            <button id="btnRollback" class="ui-btn danger">Rollback</button>
-          </div>
+          <h3>Code Context</h3>
+          <textarea id="editor" class="editor" spellcheck="false"># Start editing...</textarea>
 
           <div class="meta">
-            <label>Checkpoint ID</label>
-            <input id="checkpointId" class="ui-control" placeholder="Paste checkpoint id" />
+            <label for="checkpointId">Checkpoint ID</label>
+            <input id="checkpointId" class="ui-control" placeholder="Checkpoint id" />
           </div>
 
+          <h3>API Response</h3>
           <pre id="output" class="output"></pre>
         </aside>
       </main>
